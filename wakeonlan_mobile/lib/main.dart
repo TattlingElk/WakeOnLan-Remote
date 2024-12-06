@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:udp/udp.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
+import 'dart:io';
 
 void main() {
   runApp(const MyApp());
@@ -12,7 +13,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       home: WoLApp(),
     );
   }
@@ -26,9 +27,9 @@ class WoLApp extends StatefulWidget {
 }
 
 class _WoLAppState extends State<WoLApp> {
-  final String serverIp = '83.85.92.230'; // Replace with your server IP
-  final int serverPort = 2525; // Replace with your server port
   String macAddress = '';
+  final String targetIp = 'tattlingelk.com'; // Replace with your target IP
+  final int targetPort = 2525; // Replace with your target port
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _WoLAppState extends State<WoLApp> {
     await prefs.setString('last_mac_address', macAddress); // Save the MAC address
   }
 
-  Future<void> sendWoL(String macAddress) async {
+  Future<void> sendMacAddress(String macAddress) async {
     // Validate MAC address format
     if (!isValidMacAddress(macAddress)) {
       print('Invalid MAC address format: $macAddress');
@@ -69,15 +70,14 @@ class _WoLAppState extends State<WoLApp> {
       }
     }
 
-    // Send the magic packet to the broadcast address
-    var sender = await UDP.bind(Endpoint.any(port: Port(0))); // Bind to any available port
-    await sender.send(magicPacket, Endpoint.broadcast(port: Port(serverPort))); // Use the same port as the server
-    print('Magic packet sent to MAC address: $macAddress');
+    // Send the magic packet to the specified IP and port
+    var sender = await UDP.bind(Endpoint.any(port: const Port(0))); // Bind to any available port
+    await sender.send(magicPacket, Endpoint.unicast(InternetAddress(targetIp), port: Port(targetPort))); // Send to specific IP and port
+    print('Magic packet sent to $targetIp:$targetPort with MAC address: $macAddress');
     sender.close(); // Close the sender after sending
   }
 
   bool isValidMacAddress(String macAddress) {
-    // Check if the MAC address is in the correct format (e.g., "00:1A:2B:3C:4D:5E")
     final RegExp macRegExp = RegExp(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$');
     return macRegExp.hasMatch(macAddress);
   }
@@ -85,7 +85,7 @@ class _WoLAppState extends State<WoLApp> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Wake on LAN')),
+      appBar: AppBar(title: const Text('Send MAC Address')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -104,12 +104,12 @@ class _WoLAppState extends State<WoLApp> {
               onPressed: () {
                 if (macAddress.isNotEmpty) {
                   _saveLastMacAddress(macAddress); // Save the MAC address
-                  sendWoL(macAddress); // Call sendWoL function with the MAC address
+                  sendMacAddress(macAddress); // Call sendMacAddress function with the MAC address
                 } else {
                   print('Please enter a valid MAC address');
                 }
               },
-              child: const Text('Wake PC'),
+              child: const Text('Send MAC Address'),
             ),
           ],
         ),
