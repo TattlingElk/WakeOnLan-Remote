@@ -50,32 +50,18 @@ class _WoLAppState extends State<WoLApp> {
   }
 
   Future<void> sendMacAddress(String macAddress) async {
-    // Validate MAC address format
-    if (!isValidMacAddress(macAddress)) {
-      print('Invalid MAC address format: $macAddress');
-      return;
-    }
-
-    // Convert MAC address to bytes
-    List<int> macBytes = macAddress.split(':').map((e) => int.parse(e, radix: 16)).toList();
-
-    // Create the magic packet
-    Uint8List magicPacket = Uint8List(102);
-    for (int i = 0; i < 6; i++) {
-      magicPacket[i] = 0xFF; // First 6 bytes are 0xFF
-    }
-    for (int i = 0; i < 16; i++) {
-      for (int j = 0; j < 6; j++) {
-        magicPacket[6 + i * 6 + j] = macBytes[j]; // Next 16 repetitions of MAC address
-      }
-    }
-
-    // Send the magic packet to the specified IP and port
-    var sender = await UDP.bind(Endpoint.any(port: const Port(0))); // Bind to any available port
-    await sender.send(magicPacket, Endpoint.unicast(InternetAddress(targetIp), port: Port(targetPort))); // Send to specific IP and port
-    print('Magic packet sent to $targetIp:$targetPort with MAC address: $macAddress');
-    sender.close(); // Close the sender after sending
+  // Validate MAC address format
+  if (!isValidMacAddress(macAddress)) {
+    print('Invalid MAC address format: $macAddress');
+    return;
   }
+
+  // Send the MAC address as a string
+  var sender = await UDP.bind(Endpoint.any(port: const Port(0))); // Bind to any available port
+  await sender.send(Uint8List.fromList(macAddress.codeUnits), Endpoint.unicast(InternetAddress(targetIp), port: Port(targetPort))); // Send MAC address as bytes
+  print('MAC address sent to $targetIp:$targetPort: $macAddress');
+  sender.close(); // Close the sender after sending
+}
 
   bool isValidMacAddress(String macAddress) {
     final RegExp macRegExp = RegExp(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$');
