@@ -3,24 +3,60 @@ import 'package:flutter/material.dart';
 import 'package:udp/udp.dart';
 
 void main() {
-  runApp(MyApp());
-  startServer(); // Start the UDP server when the app starts
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: Text('WoL Server')),
-        body: Center(child: Text('Listening for WoL requests...')),
-      ),
+      home: const WoLServer(),
     );
   }
 }
 
-Future<void> startServer() async {
-  var server = await UDP.bind(Endpoint.any(port: Port(2525)));
+class WoLServer extends StatefulWidget {
+  const WoLServer({Key? key}) : super(key: key);
+
+  @override
+  _WoLServerState createState() => _WoLServerState();
+}
+
+class _WoLServerState extends State<WoLServer> {
+  String _statusText = 'Listening for WoL requests...';
+
+  @override
+  void initState() {
+    super.initState();
+    // Start the UDP server when the widget is initialized
+    startServer((macAddress) {
+      // Update the UI when a MAC address is received
+      setState(() {
+        _statusText = 'Wake up received for $macAddress';
+      });
+
+      // Revert back to the original text after 10 seconds
+      Future.delayed(const Duration(seconds: 10), () {
+        setState(() {
+          _statusText = 'Listening for WoL requests...';
+        });
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('WoL Server')),
+      body: Center(child: Text(_statusText)),
+    );
+  }
+}
+
+Future<void> startServer(Function(String) onMacAddressReceived) async {
+  var server = await UDP.bind(Endpoint.any(port: const Port(2525)));
   print('Server is running on port 2525');
 
   await for (var datagram in server.asStream()) {
@@ -30,6 +66,9 @@ Future<void> startServer() async {
       var macAddress = String.fromCharCodes(datagram.data);
       print('Received MAC address: $macAddress');
       await sendMagicPacket(macAddress); // Send the magic packet
+
+      // Call the callback function to update the UI
+      onMacAddressReceived(macAddress);
     } else {
       print('Received empty or null datagram.');
     }
@@ -58,8 +97,8 @@ Future<void> sendMagicPacket(String macAddress) async {
   }
 
   // Send the magic packet to the broadcast address
-  var sender = await UDP.bind(Endpoint.any(port: Port(0))); // Bind to any available port
-  await sender.send(magicPacket, Endpoint.broadcast(port: Port(9))); // Port 9 is commonly used for WoL
+  var sender = await UDP.bind(Endpoint.any(port: const Port(0))); // Bind to any available port
+  await sender.send(magicPacket, Endpoint.broadcast(port: const Port(9))); // Port 9 is commonly used for WoL
   print('Magic packet sent to MAC address: $macAddress');
   sender.close(); // Close the sender after sending
 }
