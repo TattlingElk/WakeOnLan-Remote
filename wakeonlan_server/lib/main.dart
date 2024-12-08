@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:udp/udp.dart';
+import 'dart:io';
 
 void main() {
   runApp(const MyApp());
@@ -11,14 +12,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: const WoLServer(),
+    return const MaterialApp(
+      home: WoLServer(),
     );
   }
 }
 
 class WoLServer extends StatefulWidget {
-  const WoLServer({Key? key}) : super(key: key);
+  const WoLServer({super.key});
 
   @override
   _WoLServerState createState() => _WoLServerState();
@@ -60,47 +61,49 @@ Future<void> startServer(Function(String) onMacAddressReceived) async {
   print('Server is running on port 2525');
 
   await for (var datagram in server.asStream()) {
+
+
+
+
     // Check if datagram is not null and has data
     if (datagram != null && datagram.data.isNotEmpty) {
       // Convert the datagram data to a string (assuming it's a MAC address)
       var macAddress = String.fromCharCodes(datagram.data);
       print('Received MAC address: $macAddress');
-      await sendMagicPacket(macAddress); // Send the magic packet
 
+      await sendMagicPacket(macAddress); // Send the magic packet
       // Call the callback function to update the UI
       onMacAddressReceived(macAddress);
+      // Validate the MAC address format
+      if (isValidMacAddress(macAddress)) {
+        await sendMagicPacket(macAddress); // Send the magic packet
+        // Call the callback function to update the UI
+        onMacAddressReceived(macAddress);
+      } else {
+        print('Invalid MAC address format received: $macAddress');
+      }
     } else {
       print('Received empty or null datagram.');
     }
   }
 }
-
 Future<void> sendMagicPacket(String macAddress) async {
-  // Validate MAC address format
-  if (!isValidMacAddress(macAddress)) {
-    print('Invalid MAC address format: $macAddress');
-    return;
-  }
 
-  // Convert MAC address to bytes
-  List<int> macBytes = macAddress.split(':').map((e) => int.parse(e, radix: 16)).toList();
+  // Convert the MAC address from string format to byte array
+  List<int> macBytes = macAddress.split(':').map((part) => int.parse(part, radix: 16)).toList();
 
   // Create the magic packet
-  Uint8List magicPacket = Uint8List(102);
-  for (int i = 0; i < 6; i++) {
-    magicPacket[i] = 0xFF; // First 6 bytes are 0xFF
-  }
-  for (int i = 0; i < 16; i++) {
-    for (int j = 0; j < 6; j++) {
-      magicPacket[6 + i * 6 + j] = macBytes[j]; // Next 16 repetitions of MAC address
-    }
-  }
+  // The magic packet consists of 6 bytes of 0xFF followed by 16 repetitions of the MAC address
+  List<int> magicPacket = List.filled(6, 0xFF) + List.generate(16, (index) => macBytes).expand((x) => x).toList();
 
-  // Send the magic packet to the broadcast address
-  var sender = await UDP.bind(Endpoint.any(port: const Port(0))); // Bind to any available port
-  await sender.send(magicPacket, Endpoint.broadcast(port: const Port(9))); // Port 9 is commonly used for WoL
-  print('Magic packet sent to MAC address: $macAddress');
-  sender.close(); // Close the sender after sending
+  // Create a UDP socket
+  RawDatagramSocket socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+  
+  // Send the magic packet to the broadcast address (255.255.255.255) on port 9
+  socket.send(Uint8List.fromList(magicPacket), InternetAddress('192.168.178.255'), 9);
+  
+  // Close the socket
+  socket.close();
 }
 
 bool isValidMacAddress(String macAddress) {
